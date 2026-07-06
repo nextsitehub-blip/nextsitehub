@@ -1,0 +1,313 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "Standard business lead from the contact inquiry desk",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Full name of the prospect"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Enterprise email of the prospect"
+        },
+        "company": {
+          "type": "string",
+          "description": "Name of the prospect's company"
+        },
+        "message": {
+          "type": "string",
+          "description": "Detail message about the redesign inquiry"
+        },
+        "services": {
+          "type": "array",
+          "description": "Array of services chosen by the prospect"
+        },
+        "budget": {
+          "type": "string",
+          "description": "Budget range for the project"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Preferred settlement currency"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 creation timestamp string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["New", "Contacted", "In Progress", "Closed"],
+          "description": "Operations workflow status"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["contact", "audit"],
+          "description": "Source category of the lead"
+        }
+      },
+      "required": ["name", "email", "message", "timestamp", "status", "type"]
+    },
+    "WebsiteAudit": {
+      "title": "WebsiteAudit",
+      "description": "Comprehensive website design and SEO audit diagnostic reports",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Target website URL audited"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of the business model"
+        },
+        "industry": {
+          "type": "string",
+          "description": "Primary industry classification of the site"
+        },
+        "servicesNeeded": {
+          "type": "array",
+          "description": "Services marked as potential fits by the owner"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Audit execution time in ISO-8601 format"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Contact email of the business owner"
+        },
+        "summary": {
+          "type": "string",
+          "description": "Executive strategy summary generated"
+        },
+        "estimatedImpact": {
+          "type": "string",
+          "description": "Projected outcome within 30 days of implementing improvements"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["New", "Contacted", "In Progress", "Closed"],
+          "description": "Workflow pipeline status"
+        }
+      },
+      "required": ["url", "email", "timestamp", "status"]
+    },
+    "PricingPlan": {
+      "title": "PricingPlan",
+      "description": "Strategic web engineering service package tiers",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique pricing plan identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the tier"
+        },
+        "priceUSD": {
+          "type": "number",
+          "description": "Price in US dollars"
+        },
+        "priceINR": {
+          "type": "number",
+          "description": "Price in Indian Rupees"
+        },
+        "priceEUR": {
+          "type": "number",
+          "description": "Price in Euros"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of target audience and deliverables"
+        },
+        "features": {
+          "type": "array",
+          "description": "Deliverables and package benefits"
+        },
+        "timeline": {
+          "type": "string",
+          "description": "Turnaround duration"
+        },
+        "badge": {
+          "type": "string",
+          "description": "Highlight pill badge"
+        }
+      },
+      "required": ["id", "name", "priceUSD", "priceINR", "priceEUR", "description", "features", "timeline"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Portfolio item showcasing NextSiteHub custom deliverables",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique project identifier"
+        },
+        "title": {
+          "type": "string",
+          "description": "Name of the case study project"
+        },
+        "client": {
+          "type": "string",
+          "description": "Name of the client organization"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Web Development", "Web Apps", "UI/UX Design", "SEO & Marketing", "Branding"],
+          "description": "Service domain classification"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief showcase description"
+        },
+        "fullDetails": {
+          "type": "string",
+          "description": "In-depth technical architecture details"
+        },
+        "metrics": {
+          "type": "string",
+          "description": "High-impact performance percentage/metric"
+        },
+        "metricsLabel": {
+          "type": "string",
+          "description": "Label for the metrics indicator"
+        },
+        "image": {
+          "type": "string",
+          "description": "Case study visual image URL"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Technology stack tags utilized"
+        },
+        "liveUrl": {
+          "type": "string",
+          "description": "Live preview URL if public"
+        }
+      },
+      "required": ["id", "title", "client", "category", "description", "fullDetails", "metrics", "metricsLabel", "image", "tags"]
+    },
+    "FAQItem": {
+      "title": "FAQItem",
+      "description": "Strategic FAQ answering client queries",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique FAQ identifier"
+        },
+        "question": {
+          "type": "string",
+          "description": "Question string"
+        },
+        "answer": {
+          "type": "string",
+          "description": "Detailed strategic response"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["services", "pricing", "process", "general"],
+          "description": "Categorization bucket"
+        }
+      },
+      "required": ["id", "question", "answer", "category"]
+    },
+    "TestimonialItem": {
+      "title": "TestimonialItem",
+      "description": "High-credibility client testimonials and reviews",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique testimonial identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Client full name"
+        },
+        "role": {
+          "type": "string",
+          "description": "Client designation role"
+        },
+        "company": {
+          "type": "string",
+          "description": "Client company name"
+        },
+        "content": {
+          "type": "string",
+          "description": "Detailed review testimony text"
+        },
+        "avatar": {
+          "type": "string",
+          "description": "Client graphic face avatar URL"
+        },
+        "rating": {
+          "type": "number",
+          "description": "Testimonial star rating out of 5"
+        }
+      },
+      "required": ["id", "name", "role", "company", "content", "avatar", "rating"]
+    },
+    "VisitorStats": {
+      "title": "VisitorStats",
+      "description": "Monthly website traffic metrics for trust validation",
+      "type": "object",
+      "properties": {
+        "monthId": {
+          "type": "string",
+          "description": "Calendar month identifier in YYYY-MM format"
+        },
+        "count": {
+          "type": "number",
+          "description": "Total unique visitors registered during the month"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp of last registered visit"
+        }
+      },
+      "required": ["monthId", "count", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Lead list records for contact inquiries"
+    },
+    "/audits/{auditId}": {
+      "schema": "WebsiteAudit",
+      "description": "Website diagnostic audits submitted"
+    },
+    "/pricing/{planId}": {
+      "schema": "PricingPlan",
+      "description": "Editable agency pricing plan tiers"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Portfolio work studies"
+    },
+    "/faqs/{faqId}": {
+      "schema": "FAQItem",
+      "description": "Informational FAQs"
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": "TestimonialItem",
+      "description": "Client recommendations"
+    },
+    "/visitors/{monthId}": {
+      "schema": "VisitorStats",
+      "description": "Aggregated visitor activity statistics tracked by month"
+    }
+  }
+}

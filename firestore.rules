@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Get user document data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Check if user has administrative roles
+    function isAdmin() {
+      return isAuthenticated() && 
+        (getUserData().role == 'super_admin' || getUserData().role == 'admin');
+    }
+    
+    // Check if user is Super Admin
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().role == 'super_admin';
+    }
+
+    // users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin());
+      allow write: if isSuperAdmin();
+    }
+    
+    // leads Collection
+    match /leads/{leadId} {
+      allow create: if true; // Public lead submission
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // audits Collection
+    match /audits/{auditId} {
+      allow create: if true; // Public audit request
+      allow read, update, delete: if isAdmin();
+    }
+    
+    // portfolio / projects Collection
+    match /projects/{projectId} {
+      allow read: if true; // Public display
+      allow write: if isAdmin();
+    }
+    
+    // testimonials Collection
+    match /testimonials/{testimonialId} {
+      allow read: if true; // Public display
+      allow write: if isAdmin();
+    }
+    
+    // pricing Collection
+    match /pricing/{pricingId} {
+      allow read: if true; // Public display
+      allow write: if isSuperAdmin(); // Super Admin manages rates & packages
+    }
+    
+    // faqs Collection
+    match /faqs/{faqId} {
+      allow read: if true; // Public display
+      allow write: if isAdmin();
+    }
+    
+    // visitors Collection
+    match /visitors/{monthId} {
+      allow read, write: if true; // Analytics operations
+    }
+    
+    // settings Collection
+    match /settings/{settingsId} {
+      allow read: if true; // Public display config
+      allow write: if isSuperAdmin(); // Super Admin configurations only
+    }
+  }
+}

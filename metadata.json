@@ -1,0 +1,6 @@
+{
+  "name": "NextSiteHub",
+  "description": "Enterprise-level premium digital agency providing web development, UI/UX, SEO, digital marketing, branding, and business growth services.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
