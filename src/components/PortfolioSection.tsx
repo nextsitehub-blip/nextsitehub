@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Project } from "../types";
-import { ArrowUpRight, CheckCircle2, Loader2 } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Loader2, ExternalLink } from "lucide-react";
 import { fetchProjects } from "../lib/firebase";
+import { motion } from "motion/react";
 
 export default function PortfolioSection() {
   const [activeCategory, setActiveCategory] = useState<string>("All");
@@ -76,129 +77,131 @@ export default function PortfolioSection() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 w-full">
-            {filteredProjects.map((proj) => (
-              <div
-                key={proj.id}
-                id={`portfolio-card-${proj.id}`}
-                className="bg-[#0F172A]/50 border border-white/5 rounded-2xl overflow-hidden group hover:border-[#2563EB]/40 transition-all duration-300 flex flex-col justify-between"
-              >
-                
-                {/* Media Container */}
-                {proj.title === "Acme Enterprise SaaS Suite" || proj.id === "proj-1" || proj.title === "Aura Luxury Lifestyle Engine" || proj.id === "proj-2" || proj.title === "Apex Fintech Dashboard" || proj.id === "proj-3" || proj.title === "EcoSphere Core Brand Blueprint" || proj.id === "proj-4" || (proj.liveUrl && proj.liveUrl !== "#") ? (
-                  <a
-                    href={
-                      proj.title === "Acme Enterprise SaaS Suite" || proj.id === "proj-1"
-                        ? "https://acme-enterprise-saa-s-suite.vercel.app"
-                        : proj.title === "Aura Luxury Lifestyle Engine" || proj.id === "proj-2"
-                        ? "https://aura-luxury-lifestyle-engine.vercel.app"
-                        : proj.title === "Apex Fintech Dashboard" || proj.id === "proj-3"
-                        ? "https://apex-fintech-dashboard-phi.vercel.app"
-                        : proj.title === "EcoSphere Core Brand Blueprint" || proj.id === "proj-4"
-                        ? "https://eco-sphere-core-brand-blueprint.vercel.app"
-                        : proj.liveUrl
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={
-                      proj.title === "Acme Enterprise SaaS Suite" || proj.id === "proj-1"
-                        ? "Open Acme Enterprise SaaS Suite project"
-                        : proj.title === "Aura Luxury Lifestyle Engine" || proj.id === "proj-2"
-                        ? "Open Aura Luxury Lifestyle Engine project"
-                        : proj.title === "Apex Fintech Dashboard" || proj.id === "proj-3"
-                        ? "Open Apex Fintech Dashboard project"
-                        : proj.title === "EcoSphere Core Brand Blueprint" || proj.id === "proj-4"
-                        ? "Open EcoSphere Core Brand Blueprint project"
-                        : `Open ${proj.title} project`
-                    }
-                    className="relative aspect-video overflow-hidden border-b border-white/5 bg-slate-950 block cursor-pointer"
-                  >
+            {filteredProjects.map((proj) => {
+              const projectUrl = proj.title === "Acme Enterprise SaaS Suite" || proj.id === "proj-1"
+                ? "https://acme-enterprise-saa-s-suite.vercel.app"
+                : proj.title === "Aura Luxury Lifestyle Engine" || proj.id === "proj-2"
+                ? "https://aura-luxury-lifestyle-engine.vercel.app"
+                : proj.title === "Apex Fintech Dashboard" || proj.id === "proj-3"
+                ? "https://apex-fintech-dashboard-phi.vercel.app"
+                : proj.title === "EcoSphere Core Brand Blueprint" || proj.id === "proj-4"
+                ? "https://eco-sphere-core-brand-blueprint.vercel.app"
+                : proj.liveUrl || "#";
+
+              const ariaLabelText = proj.title === "Acme Enterprise SaaS Suite" || proj.id === "proj-1"
+                ? "Open Acme Enterprise SaaS Suite project"
+                : proj.title === "Aura Luxury Lifestyle Engine" || proj.id === "proj-2"
+                ? "Open Aura Luxury Lifestyle Engine project"
+                : proj.title === "Apex Fintech Dashboard" || proj.id === "proj-3"
+                ? "Open Apex Fintech Dashboard project"
+                : proj.title === "EcoSphere Core Brand Blueprint" || proj.id === "proj-4"
+                ? "Open EcoSphere Core Brand Blueprint project"
+                : `Open ${proj.title} project`;
+
+              return (
+                <motion.a
+                  key={proj.id}
+                  id={`portfolio-card-${proj.id}`}
+                  href={projectUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={ariaLabelText}
+                  whileHover={{ y: -6, scale: 1.005 }}
+                  whileTap={{ scale: 0.995 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  className="relative bg-[#0F172A]/50 border border-white/5 rounded-2xl overflow-hidden group hover:border-[#2563EB]/40 hover:shadow-2xl hover:shadow-[#2563EB]/10 transition-all duration-300 flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#06B6D4]/50 focus:border-transparent"
+                >
+                  {/* Subtle Premium Glow Gradient on Hover */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#06B6D4]/0 via-[#2563EB]/[0.02] to-[#06B6D4]/[0.03] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+
+                  {/* Media Container */}
+                  <div className="relative aspect-video overflow-hidden border-b border-white/5 bg-slate-950 block">
                     <img
                       src={proj.image}
                       alt={proj.title}
                       referrerPolicy="no-referrer"
                       loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-85"
+                      className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500 opacity-85"
                     />
                     
                     {/* Live Action button on hover */}
                     <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                      <div className="w-12 h-12 rounded-full bg-[#06B6D4] text-slate-950 flex items-center justify-center shadow-lg shadow-[#06B6D4]/25">
+                      <div className="w-12 h-12 rounded-full bg-[#06B6D4] text-slate-950 flex items-center justify-center shadow-lg shadow-[#06B6D4]/25 transform group-hover:scale-110 transition-transform duration-300">
                         <ArrowUpRight className="w-5 h-5" />
                       </div>
                     </div>
 
                     {/* Performance Badge floating */}
-                    <div className="absolute top-4 left-4 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/5 text-[10px] font-mono tracking-wider uppercase text-emerald-400 font-semibold flex items-center gap-1.5">
+                    <div className="absolute top-4 left-4 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/5 text-[10px] font-mono tracking-wider uppercase text-emerald-400 font-semibold flex items-center gap-1.5 shadow-sm">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       {proj.category}
                     </div>
-                  </a>
-                ) : (
-                  <div className="relative aspect-video overflow-hidden border-b border-white/5 bg-slate-950">
-                    <img
-                      src={proj.image}
-                      alt={proj.title}
-                      referrerPolicy="no-referrer"
-                      loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-85"
-                    />
+                  </div>
+
+                  {/* Information Container */}
+                  <div className="p-6 sm:p-8 space-y-6 flex-grow flex flex-col justify-between relative z-10">
                     
-                    {/* Live Action button on hover */}
-                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
-                      <div className="w-12 h-12 rounded-full bg-[#06B6D4] text-slate-950 flex items-center justify-center shadow-lg shadow-[#06B6D4]/25">
-                        <ArrowUpRight className="w-5 h-5" />
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-xs font-semibold text-slate-500 font-mono tracking-widest uppercase">
+                          CLIENT: {proj.client}
+                        </span>
+                        {/* Live Status Badge */}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono font-semibold tracking-wider text-emerald-400 shadow-sm shadow-emerald-500/5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          LIVE PREVIEW
+                        </span>
                       </div>
+                      
+                      <h3 className="font-display text-xl sm:text-2xl font-bold text-white group-hover:text-[#06B6D4] transition-colors duration-300">
+                        {proj.title}
+                      </h3>
+                      <p className="text-slate-400 text-sm leading-relaxed">
+                        {proj.description}
+                      </p>
                     </div>
 
-                    {/* Performance Badge floating */}
-                    <div className="absolute top-4 left-4 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/5 text-[10px] font-mono tracking-wider uppercase text-emerald-400 font-semibold flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {proj.category}
+                    {/* Static Metrics panel inside project */}
+                    <div className="p-4 rounded-xl bg-[#111827] border border-white/5 flex items-center justify-between transition-colors duration-300 group-hover:bg-[#111827]/80 group-hover:border-[#2563EB]/20">
+                      <div>
+                        <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">
+                          {proj.metricsLabel}
+                        </span>
+                        <span className="text-base font-bold text-white font-display mt-0.5 block">
+                          {proj.metrics}
+                        </span>
+                      </div>
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                     </div>
-                  </div>
-                )}
 
-                {/* Information Container */}
-                <div className="p-6 sm:p-8 space-y-6 flex-grow flex flex-col justify-between">
-                  
-                  <div className="space-y-3">
-                    <span className="text-xs font-semibold text-slate-500 font-mono tracking-widest uppercase">
-                      CLIENT: {proj.client}
-                    </span>
-                    <h3 className="font-display text-xl sm:text-2xl font-bold text-white group-hover:text-[#06B6D4] transition-colors">
-                      {proj.title}
-                    </h3>
-                    <p className="text-slate-400 text-sm leading-relaxed">
-                      {proj.description}
-                    </p>
-                  </div>
+                    {/* Tags row */}
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {proj.tags.map((tag, i) => (
+                        <span key={i} className="text-[10px] font-mono text-slate-400 bg-[#111827]/60 border border-white/5 px-2.5 py-1 rounded-md transition-colors duration-300 group-hover:border-white/10 group-hover:text-slate-200">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
 
-                  {/* Static Metrics panel inside project */}
-                  <div className="p-4 rounded-xl bg-[#111827] border border-white/5 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider block">
-                        {proj.metricsLabel}
+                    {/* CTA Footer Row */}
+                    <div className="pt-5 border-t border-white/5 flex items-center justify-between flex-wrap gap-4 mt-2">
+                      <span className="text-xs font-semibold font-mono tracking-wider text-[#06B6D4] group-hover:text-[#2563EB] transition-colors duration-300 flex items-center gap-1.5">
+                        EXPLORE LIVE PROJECT
+                        <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
                       </span>
-                      <span className="text-base font-bold text-white font-display mt-0.5 block">
-                        {proj.metrics}
+                      
+                      {/* Mobile Touch Indicator */}
+                      <span className="lg:hidden inline-flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg animate-pulse">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        TAP TO EXPLORE
                       </span>
                     </div>
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+
                   </div>
 
-                  {/* Tags row */}
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {proj.tags.map((tag, i) => (
-                      <span key={i} className="text-[10px] font-mono text-slate-400 bg-[#111827]/60 border border-white/5 px-2.5 py-1 rounded-md">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-
-                </div>
-
-              </div>
-            ))}
+                </motion.a>
+              );
+            })}
           </div>
         )}
 
