@@ -43,13 +43,7 @@ export default function AuditWizard() {
     const cleanUrl = url.trim();
     const cleanEmail = email.trim();
 
-    if (!cleanUrl) {
-      setErrorMsg("Please provide your website URL.");
-      toast("Website URL is required.", "warning");
-      return;
-    }
-
-    if (!cleanUrl.includes(".") || cleanUrl.length < 4) {
+    if (cleanUrl && (!cleanUrl.includes(".") || cleanUrl.length < 4)) {
       setErrorMsg("Please enter a valid website URL address.");
       toast("Invalid website URL format.", "error");
       return;
@@ -77,7 +71,7 @@ export default function AuditWizard() {
       const response = await fetch("/api/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: cleanUrl, description, industry, servicesNeeded, email: cleanEmail })
+        body: JSON.stringify({ url: cleanUrl || "No Website (Strategy Audit)", description, industry, servicesNeeded, email: cleanEmail })
       });
 
       if (!response.ok) {
@@ -89,7 +83,7 @@ export default function AuditWizard() {
       const auditResult: WebsiteAudit = {
         ...data,
         email: cleanEmail,
-        url: cleanUrl,
+        url: cleanUrl || "No Website (Strategy Audit)",
         description,
         industry,
         servicesNeeded,
@@ -152,7 +146,7 @@ export default function AuditWizard() {
               </p>
             </div>
 
-            <form onSubmit={runAudit} className="bg-[#0F172A]/50 border border-white/5 p-8 rounded-2xl space-y-6 shadow-2xl" id="audit-form">
+            <form onSubmit={runAudit} noValidate className="bg-[#0F172A]/50 border border-white/5 p-8 rounded-2xl space-y-6 shadow-2xl" id="audit-form">
               {errorMsg && (
                 <div className="p-4 bg-red-500/10 border border-red-500/25 text-red-400 text-xs rounded-xl flex items-center space-x-2">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -164,12 +158,11 @@ export default function AuditWizard() {
                 
                 {/* Website URL */}
                 <div className="space-y-2">
-                  <label className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold">Website URL *</label>
+                  <label className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold">Website URL (Optional)</label>
                   <div className="relative">
                     <Laptop className="absolute left-4 top-3.5 w-4 h-4 text-slate-500" />
                     <input
                       type="url"
-                      required
                       placeholder="https://yourbrand.com"
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}

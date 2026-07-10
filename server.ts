@@ -28,10 +28,10 @@ async function startServer() {
 
   // API endpoints
   app.post("/api/audit", async (req, res) => {
-    const { url, description, industry, servicesNeeded } = req.body;
+    let { url, description, industry, servicesNeeded } = req.body;
     
     if (!url) {
-      return res.status(400).json({ error: "Website URL is required." });
+      url = "No Website (Strategy Audit)";
     }
 
     const aiClient = getAI();
