@@ -146,6 +146,11 @@ export const Validators = {
       createdAt: data.createdAt || new Date().toISOString(),
       lastLogin: data.lastLogin || new Date().toISOString(),
       status: data.status || "active",
+      username: data.username,
+      hashedPassword: data.hashedPassword,
+      lastCredentialUpdate: data.lastCredentialUpdate,
+      loginHistory: data.loginHistory,
+      failedAttempts: data.failedAttempts,
     };
   },
 };

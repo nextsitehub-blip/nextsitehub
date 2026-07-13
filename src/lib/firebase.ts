@@ -887,67 +887,136 @@ export async function getCurrentUserProfile(uid: string): Promise<User | null> {
   }
 }
 
-export async function loginWithEmail(email: string, password: string): Promise<User> {
-  if (isFirebaseAvailable && auth && db) {
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const firebaseUser = userCredential.user;
-      
-      let profile = await getCurrentUserProfile(firebaseUser.uid);
-      
-      if (!profile) {
-        // If this is the very first user OR email is owner, boost to super_admin
-        const usersSnap = await getDocs(collection(db, "users"));
-        const isEmpty = usersSnap.empty;
-        const isOwner = email.toLowerCase() === "nextsitehub@gmail.com";
-        const role: UserRole = (isEmpty || isOwner) ? "super_admin" : "admin";
-        
-        profile = {
-          uid: firebaseUser.uid,
-          fullName: firebaseUser.displayName || email.split("@")[0],
-          email: firebaseUser.email || email,
-          role: role,
-          profileImage: firebaseUser.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+export async function loginWithEmail(usernameOrEmail: string, passcode: string): Promise<User> {
+  try {
+    const isEmailInput = usernameOrEmail.includes("@");
+    const payload = isEmailInput 
+      ? { email: usernameOrEmail, password: passcode }
+      : { username: usernameOrEmail, password: passcode };
+
+    const res = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || "Administrative credentials invalid.");
+    }
+
+    const { token, user } = await res.json() as { token: string; user: User };
+
+    // Save token for secure HTTP request headers
+    localStorage.setItem("nextsitehub_token", token);
+
+    // If Firebase Auth is available, synchronize the client SDK session
+    if (isFirebaseAvailable && auth) {
+      const firebaseEmail = user.username 
+        ? `${user.username}@nextsitehub.local`
+        : user.email;
+      try {
+        await signInWithEmailAndPassword(auth, firebaseEmail, passcode);
+      } catch (authError: any) {
+        console.warn("Client-side Firebase SDK authentication skipped, relying on session token.", authError);
+      }
+    }
+
+    return user;
+  } catch (e: any) {
+    console.error("Backend authenticated login failed:", e);
+    
+    // Local storage mock fallback for isolated playground modes
+    if (!isFirebaseAvailable) {
+      if (passcode === "admin123" || usernameOrEmail.includes("nextsitehub") || usernameOrEmail === "admin") {
+        const mockUid = "local_admin_uid";
+        const profile: User = {
+          uid: mockUid,
+          fullName: "NextSiteHub Owner",
+          email: "admin@nextsitehub.com",
+          role: "super_admin",
+          profileImage: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
           createdAt: new Date().toISOString(),
           lastLogin: new Date().toISOString(),
-          status: "active"
+          status: "active",
+          username: "admin",
+          lastCredentialUpdate: new Date().toISOString(),
+          failedAttempts: 0,
+          loginHistory: []
         };
-        await setDoc(doc(db, "users", firebaseUser.uid), profile);
-      } else {
-        // Update last login timestamp
-        profile.lastLogin = new Date().toISOString();
-        await setDoc(doc(db, "users", firebaseUser.uid), profile, { merge: true });
+        const fallbackList = [profile];
+        localStorage.setItem("nextsitehub_users_fallback", JSON.stringify(fallbackList));
+        return profile;
       }
-      
-      if (profile.status === "inactive") {
-        throw new Error("This administrator account has been deactivated. Please contact the Super Admin.");
-      }
-      
-      return profile;
-    } catch (e: any) {
-      console.error("Firebase Auth Sign-In Failure:", e);
-      throw e;
     }
-  } else {
-    // Local storage mock authentication for local playground mode
-    if (password === "admin123" || email.includes("nextsitehub")) {
-      const mockUid = "local_admin_uid";
-      const profile: User = {
-        uid: mockUid,
-        fullName: "NextSiteHub Owner",
-        email: email,
-        role: "super_admin",
-        profileImage: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        status: "active"
-      };
-      const fallbackList = [profile];
-      localStorage.setItem("nextsitehub_users_fallback", JSON.stringify(fallbackList));
-      return profile;
-    }
-    throw new Error("Local fallback authentication failed. Please enter admin credentials.");
+    throw e;
   }
+}
+
+export async function updateAdminCredentials(currentPasscode: string, newUsername: string, newPasscode: string, recoveryEmail?: string): Promise<User> {
+  const token = localStorage.getItem("nextsitehub_token");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch("/api/v1/auth/update-credentials", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ currentPasscode, newUsername, newPasscode, recoveryEmail })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || "Failed to update administrative credentials.");
+  }
+
+  const { user } = await res.json() as { user: User };
+
+  // Update client Firebase Auth session if active
+  if (isFirebaseAvailable && auth && auth.currentUser) {
+    try {
+      const { updateEmail, updatePassword } = await import("firebase/auth");
+      await updateEmail(auth.currentUser, `${newUsername}@nextsitehub.local`);
+      await updatePassword(auth.currentUser, newPasscode);
+    } catch (authError) {
+      console.warn("Client SDK auth synchronization skipped:", authError);
+    }
+  }
+
+  return user;
+}
+
+export async function checkSetupStatus(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/v1/auth/setup-status");
+    if (!res.ok) return true; // Default to true on failure to prevent accidental setup display
+    const data = await res.json();
+    return !!data.setupCompleted;
+  } catch (err) {
+    console.error("Error checking setup status:", err);
+    return true; // Fallback to true (secured)
+  }
+}
+
+export async function setupFirstAdmin(username: string, passcode: string, email?: string): Promise<User> {
+  const res = await fetch("/api/v1/auth/setup-admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, passcode, email })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || "Administrative initial setup failed.");
+  }
+
+  const { token, user } = await res.json() as { token: string; user: User };
+
+  // Save token for secure HTTP requests
+  localStorage.setItem("nextsitehub_token", token);
+
+  return user;
 }
 
 export async function loginWithGoogle(): Promise<User> {

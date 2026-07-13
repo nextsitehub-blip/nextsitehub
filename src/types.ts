@@ -123,6 +123,13 @@ export interface User {
   createdAt: string;
   lastLogin: string;
   status: "active" | "inactive";
+  username?: string;
+  hashedPassword?: string;
+  lastCredentialUpdate?: string;
+  loginHistory?: { timestamp: string; success: boolean; ip?: string; userAgent?: string; message?: string }[];
+  failedAttempts?: number;
+  recoveryEmail?: string;
+  setupCompleted?: boolean;
 }
 
 export interface SiteSettings {

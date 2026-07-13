@@ -32,6 +32,8 @@ apiRouter.get("/cms/testimonials", CmsController.getTestimonials);
 apiRouter.get("/cms/settings", CmsController.getSettings);
 
 // Authentication Entrypoints
+apiRouter.get("/auth/setup-status", AuthController.getSetupStatus);
+apiRouter.post("/auth/setup-admin", AuthController.setupFirstAdmin);
 apiRouter.post("/auth/login", AuthController.login);
 apiRouter.post("/auth/register", AuthController.register);
 
@@ -42,6 +44,8 @@ apiRouter.post("/auth/register", AuthController.register);
 const authenticate = AuthMiddlewares.authenticateSession as any;
 const restrictToAdmin = AuthMiddlewares.requireRole(["admin", "super_admin"]) as any;
 const restrictToSuperAdmin = AuthMiddlewares.requireRole(["super_admin"]) as any;
+
+apiRouter.post("/auth/update-credentials", authenticate, restrictToAdmin, AuthController.updateCredentials);
 
 // CRM Pipelines operations
 apiRouter.get("/crm/leads", authenticate, restrictToAdmin, CrmController.getLeads);

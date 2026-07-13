@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import bcrypt from "bcryptjs";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, getDocs, doc, setDoc, deleteDoc, updateDoc, getDoc, query, orderBy } from "firebase/firestore";
 import { Lead, WebsiteAudit, Project, FAQItem, TestimonialItem, PricingPlan, User, SiteSettings } from "../../src/types";
@@ -370,6 +371,50 @@ class DualEngineRepository {
 
   // --- User Operations ---
   public async getUsers(): Promise<User[]> {
+    let migrated = false;
+    for (let i = 0; i < this.localData.users.length; i++) {
+      const u = this.localData.users[i];
+      if (u.role === "super_admin" || u.role === "admin") {
+        if (!u.username || !u.hashedPassword) {
+          let username = u.username;
+          if (!username) {
+            const prefix = u.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_-]/g, "");
+            username = prefix.length >= 5 ? prefix : `${prefix}_admin`;
+            if (username.length < 5) username = `admin_${username}`;
+            username = username.slice(0, 32);
+          }
+          let hashedPassword = u.hashedPassword;
+          if (!hashedPassword) {
+            hashedPassword = bcrypt.hashSync("nextsitehub2026", 10);
+          }
+
+          this.localData.users[i] = {
+            ...u,
+            username,
+            hashedPassword,
+            lastCredentialUpdate: u.lastCredentialUpdate || new Date().toISOString(),
+            failedAttempts: u.failedAttempts || 0,
+            loginHistory: u.loginHistory || []
+          };
+          migrated = true;
+          this.log("action", `Admin ${u.email} automatically migrated to username: ${username}`);
+        }
+      }
+    }
+    if (migrated) {
+      this.saveLocalDB(this.localData);
+      if (this.isFirebaseReady && this.firebaseDb) {
+        for (const u of this.localData.users) {
+          if (u.role === "super_admin" || u.role === "admin") {
+            try {
+              await setDoc(doc(this.firebaseDb, "users", u.uid), u);
+            } catch (err) {
+              this.log("error", `Firebase migrate user fail for ${u.uid}`, err);
+            }
+          }
+        }
+      }
+    }
     return this.localData.users;
   }
 

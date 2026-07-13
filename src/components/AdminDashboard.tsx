@@ -17,6 +17,9 @@ import {
   isFirebaseAvailable,
   getCurrentUserProfile,
   loginWithEmail,
+  updateAdminCredentials,
+  checkSetupStatus,
+  setupFirstAdmin,
   loginWithGoogle,
   createNewAdminUser,
   fetchAllUsers,
@@ -31,7 +34,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { Lead, WebsiteAudit, PricingPlan, Project, FAQItem, TestimonialItem, User, UserRole, SiteSettings } from "../types";
 import { 
-  Users, FileText, CheckCircle2, Clock, Eye, Trash2, Edit3, Plus, 
+  Users, FileText, CheckCircle2, Clock, Eye, EyeOff, Trash2, Edit3, Plus, 
   Filter, Search, ShieldX, KeyRound, ArrowRight, X, Mail, Coins, 
   CheckCircle, AlertTriangle, RefreshCw, LayoutDashboard, Layers, 
   HelpCircle, MessageSquare, LogOut, ChevronLeft, ChevronRight, Star, 
@@ -63,11 +66,37 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   const [loginError, setLoginError] = useState("");
   const [resetSent, setResetSent] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Dynamic Settings and User Registries
   const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null);
   const [usersList, setUsersList] = useState<User[]>([]);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Administrative credentials updating states
+  const [newUsername, setNewUsername] = useState("");
+  const [currentPasscode, setCurrentPasscode] = useState("");
+  const [newPasscode, setNewPasscode] = useState("");
+  const [confirmNewPasscode, setConfirmNewPasscode] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [showCurrentPasscode, setShowCurrentPasscode] = useState(false);
+  const [showNewPasscode, setShowNewPasscode] = useState(false);
+  const [showConfirmNewPasscode, setShowConfirmNewPasscode] = useState(false);
+  const [isSavingCredentials, setIsSavingCredentials] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Setup related state
+  const [isSetupChecked, setIsSetupChecked] = useState(false);
+  const [isSetupRequired, setIsSetupRequired] = useState(false);
+  const [setupUsername, setSetupUsername] = useState("");
+  const [setupPasscode, setSetupPasscode] = useState("");
+  const [setupConfirmPasscode, setSetupConfirmPasscode] = useState("");
+  const [setupRecoveryEmail, setSetupRecoveryEmail] = useState("");
+  const [showSetupPasscode, setShowSetupPasscode] = useState(false);
+  const [showSetupConfirmPasscode, setShowSetupConfirmPasscode] = useState(false);
+  const [isSubmittingSetup, setIsSubmittingSetup] = useState(false);
+  const [setupSuccess, setSetupSuccess] = useState(false);
 
   // User invitation / management form
   const [newUserEmail, setNewUserEmail] = useState("");
@@ -113,6 +142,21 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
   const [faqsPage, setFaqsPage] = useState(1);
   const [testimonialsPage, setTestimonialsPage] = useState(1);
   const ITEMS_PER_PAGE = 5;
+
+  // Check Setup status on mount
+  useEffect(() => {
+    const runSetupCheck = async () => {
+      try {
+        const setupCompleted = await checkSetupStatus();
+        setIsSetupRequired(!setupCompleted);
+      } catch (err) {
+        console.error("Failed to fetch administrator initial setup status:", err);
+      } finally {
+        setIsSetupChecked(true);
+      }
+    };
+    runSetupCheck();
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -367,6 +411,105 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
     }
   };
 
+  // Synchronize newUsername state with currentUser username
+  useEffect(() => {
+    if (currentUser?.username) {
+      setNewUsername(currentUser.username);
+    } else if (currentUser?.email) {
+      setNewUsername(currentUser.email.split("@")[0]);
+    }
+    if (currentUser?.recoveryEmail) {
+      setRecoveryEmail(currentUser.recoveryEmail);
+    } else if (currentUser?.email) {
+      setRecoveryEmail(currentUser.email);
+    }
+  }, [currentUser, activeTab]);
+
+  const handleSaveCredentials = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPasscode) {
+      toast("Verification failed. Current passcode is required.", "warning");
+      return;
+    }
+    if (!newUsername) {
+      toast("Verification failed. New username is required.", "warning");
+      return;
+    }
+    if (!recoveryEmail) {
+      toast("Verification failed. Recovery email is required.", "warning");
+      return;
+    }
+    if (newPasscode.length < 12) {
+      toast("Passcode is too short. Minimum 12 characters required.", "warning");
+      return;
+    }
+    if (newPasscode !== confirmNewPasscode) {
+      toast("Passcode validation failed. New passcodes do not match.", "error");
+      return;
+    }
+
+    // Validate strong passcode criteria (upper, lower, number, special)
+    const hasUpper = /[A-Z]/.test(newPasscode);
+    const hasLower = /[a-z]/.test(newPasscode);
+    const hasDigit = /[0-9]/.test(newPasscode);
+    const hasSpecial = /[^A-Za-z0-9]/.test(newPasscode);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      toast("Passcode must include uppercase, lowercase, numbers, and special characters.", "error");
+      return;
+    }
+
+    setShowConfirmDialog(true);
+  };
+
+  const confirmSaveCredentials = async () => {
+    setIsSavingCredentials(true);
+    try {
+      const updatedUser = await updateAdminCredentials(currentPasscode, newUsername, newPasscode, recoveryEmail);
+      setCurrentUser(updatedUser);
+      localStorage.setItem("nextsitehub_local_session", JSON.stringify(updatedUser));
+      toast("Administrative credentials updated successfully.", "success");
+      
+      // Reset sensitive fields
+      setCurrentPasscode("");
+      setNewPasscode("");
+      setConfirmNewPasscode("");
+      setShowConfirmDialog(false);
+    } catch (err: any) {
+      toast(err.message || "Failed to commit credential updates.", "error");
+    } finally {
+      setIsSavingCredentials(false);
+    }
+  };
+
+  const handleGeneratePasscode = () => {
+    const length = 16;
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const symbols = "!@#$%^&*()_+~`|}{[]:;?><,./-=";
+    
+    let code = [
+      uppercase[Math.floor(Math.random() * uppercase.length)],
+      lowercase[Math.floor(Math.random() * uppercase.length)],
+      numbers[Math.floor(Math.random() * numbers.length)],
+      symbols[Math.floor(Math.random() * symbols.length)]
+    ];
+    
+    const allChars = uppercase + lowercase + numbers + symbols;
+    for (let i = 4; i < length; i++) {
+      code.push(allChars[Math.floor(Math.random() * allChars.length)]);
+    }
+    
+    code = code.sort(() => Math.random() - 0.5);
+    const generated = code.join("");
+    
+    setNewPasscode(generated);
+    setConfirmNewPasscode(generated);
+    setShowNewPasscode(true);
+    setShowConfirmNewPasscode(true);
+    toast("Strong passcode generated successfully.", "success");
+  };
+
   // Status transitions
   const handleUpdateStatus = async (id: string, type: "contact" | "audit", newStatus: Lead["status"]) => {
     setActionLoading(true);
@@ -581,6 +724,236 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
     }
   };
 
+  const handleSetupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!setupUsername) {
+      toast("Verification failed. Username is required.", "warning");
+      return;
+    }
+    if (setupUsername.length < 5 || setupUsername.length > 32) {
+      toast("Username must be between 5 and 32 characters.", "warning");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(setupUsername)) {
+      toast("Username can only contain alphanumeric characters, underscores, and hyphens.", "warning");
+      return;
+    }
+    if (setupPasscode.length < 12) {
+      toast("Passcode is too short. Minimum 12 characters required.", "warning");
+      return;
+    }
+    if (setupPasscode !== setupConfirmPasscode) {
+      toast("Passcode validation failed. Passcodes do not match.", "error");
+      return;
+    }
+
+    const hasUpper = /[A-Z]/.test(setupPasscode);
+    const hasLower = /[a-z]/.test(setupPasscode);
+    const hasDigit = /[0-9]/.test(setupPasscode);
+    const hasSpecial = /[^A-Za-z0-9]/.test(setupPasscode);
+    if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+      toast("Passcode must include uppercase, lowercase, numbers, and special characters.", "error");
+      return;
+    }
+
+    setIsSubmittingSetup(true);
+    try {
+      const user = await setupFirstAdmin(setupUsername, setupPasscode, setupRecoveryEmail);
+      setCurrentUser(user);
+      setIsSetupRequired(false);
+      setIsAuthenticated(true);
+      localStorage.setItem("nextsitehub_local_session", JSON.stringify(user));
+      sessionStorage.setItem("nextsitehub_admin_auth", "true");
+      toast("Initial administrator credentials established successfully!", "success");
+    } catch (err: any) {
+      toast(err.message || "Failed to complete initial administrator setup.", "error");
+    } finally {
+      setIsSubmittingSetup(false);
+    }
+  };
+
+  const handleSetupGeneratePasscode = () => {
+    const length = 16;
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const symbols = "!@#$%^&*()_+~`|}{[]:;?><,./-=";
+    const all = uppercase + lowercase + numbers + symbols;
+    let generated = "";
+    generated += uppercase[Math.floor(Math.random() * uppercase.length)];
+    generated += lowercase[Math.floor(Math.random() * lowercase.length)];
+    generated += numbers[Math.floor(Math.random() * numbers.length)];
+    generated += symbols[Math.floor(Math.random() * symbols.length)];
+    for (let i = 4; i < length; i++) {
+      generated += all[Math.floor(Math.random() * all.length)];
+    }
+    generated = generated.split("").sort(() => 0.5 - Math.random()).join("");
+    setSetupPasscode(generated);
+    setSetupConfirmPasscode(generated);
+    setShowSetupPasscode(true);
+    setShowSetupConfirmPasscode(true);
+  };
+
+  // -------------------------------------------------------------
+  // FIRST-TIME ADMINISTRATOR SETUP SCREEN
+  // -------------------------------------------------------------
+  if (isSetupChecked && isSetupRequired) {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#060813] flex items-center justify-center p-4 font-sans overflow-y-auto">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
+
+        <div className="bg-[#0F172A] border border-slate-800/80 rounded-2xl w-full max-w-2xl p-8 shadow-2xl relative overflow-hidden animate-scaleIn my-8">
+          <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-blue-600 via-cyan-500 to-indigo-600" />
+          
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+            title="Cancel"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+          <div className="w-12 h-12 bg-gradient-to-tr from-[#2563EB] to-[#06B6D4] rounded-xl flex items-center justify-center mx-auto mb-6 rotate-12 shadow-lg shadow-[#2563EB]/25">
+            <Shield className="w-6 h-6 text-white" />
+          </div>
+
+          <h2 className="font-display text-2xl font-black text-white tracking-tight uppercase text-center">
+            First-Time Administrator Setup
+          </h2>
+          <p className="text-[10px] font-mono tracking-wider text-slate-500 uppercase mt-1 text-center">
+            No Active Admin Account Found. Please provision the system owner account.
+          </p>
+
+          <form onSubmit={handleSetupSubmit} className="mt-8 space-y-5 text-left">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Administrator Username *</label>
+                <input
+                  type="text"
+                  value={setupUsername}
+                  onChange={(e) => setSetupUsername(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 px-3 text-white focus:outline-none font-mono"
+                  placeholder="e.g. admin"
+                  required
+                />
+                <p className="text-[9px] text-slate-500 font-mono mt-1">5-32 characters, letters, numbers, underscores, hyphens.</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Recovery Email *</label>
+                <input
+                  type="email"
+                  value={setupRecoveryEmail}
+                  onChange={(e) => setSetupRecoveryEmail(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 px-3 text-white focus:outline-none"
+                  placeholder="e.g. recovery@domain.com"
+                  required
+                />
+                <p className="text-[9px] text-slate-500 font-mono mt-1">Required for emergency account recovery and critical security alerts.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase font-bold">Administrator Passcode *</label>
+                  <button
+                    type="button"
+                    onClick={handleSetupGeneratePasscode}
+                    className="text-[9px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Generate Strong</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showSetupPasscode ? "text" : "password"}
+                    value={setupPasscode}
+                    onChange={(e) => setSetupPasscode(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 pl-3 pr-10 text-white focus:outline-none font-mono"
+                    placeholder="••••••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSetupPasscode(!showSetupPasscode)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white transition-colors"
+                  >
+                    {showSetupPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {setupPasscode && (
+                  <div className="mt-1.5 space-y-1">
+                    <div className="flex justify-between text-[9px] font-mono text-slate-500">
+                      <span>Strength Estimate:</span>
+                      <span className={
+                        setupPasscode.length < 12 ? "text-red-400" :
+                        (/[A-Z]/.test(setupPasscode) && /[a-z]/.test(setupPasscode) && /[0-9]/.test(setupPasscode) && /[^A-Za-z0-9]/.test(setupPasscode)) ? "text-emerald-400" : "text-amber-400"
+                      }>
+                        {setupPasscode.length < 12 ? "Too Short" :
+                         (/[A-Z]/.test(setupPasscode) && /[a-z]/.test(setupPasscode) && /[0-9]/.test(setupPasscode) && /[^A-Za-z0-9]/.test(setupPasscode)) ? "Strong (Complexity Met)" : "Weak (Requires Upper/Lower/Number/Special)"}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-slate-850 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-300" style={{
+                        width: setupPasscode.length < 12 ? "25%" :
+                               (/[A-Z]/.test(setupPasscode) && /[a-z]/.test(setupPasscode) && /[0-9]/.test(setupPasscode) && /[^A-Za-z0-9]/.test(setupPasscode)) ? "100%" : "60%",
+                        backgroundColor: setupPasscode.length < 12 ? "#F87171" :
+                                         (/[A-Z]/.test(setupPasscode) && /[a-z]/.test(setupPasscode) && /[0-9]/.test(setupPasscode) && /[^A-Za-z0-9]/.test(setupPasscode)) ? "#34D399" : "#FBBF24"
+                      }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Confirm Passcode *</label>
+                <div className="relative">
+                  <input
+                    type={showSetupConfirmPasscode ? "text" : "password"}
+                    value={setupConfirmPasscode}
+                    onChange={(e) => setSetupConfirmPasscode(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 pl-3 pr-10 text-white focus:outline-none font-mono"
+                    placeholder="••••••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSetupConfirmPasscode(!showSetupConfirmPasscode)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white transition-colors"
+                  >
+                    {showSetupConfirmPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-2 text-[11px] text-slate-400">
+              <h4 className="text-[10px] font-mono text-[#06B6D4] uppercase font-bold">First-Time Setup Guidelines</h4>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Username must contain only letters, numbers, underscores, or hyphens.</li>
+                <li>Passcode must be at least 12 characters.</li>
+                <li>Passcode must include uppercase, lowercase, numbers, and special symbols.</li>
+                <li>Your recovery email will allow passcode recovery and audit updates.</li>
+              </ul>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmittingSetup}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-6"
+            >
+              {isSubmittingSetup ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              <span>Initialize System Owner Account</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   // -------------------------------------------------------------
   // SIGN IN PANEL SCREEN (SECURE LOGIN)
   // -------------------------------------------------------------
@@ -660,10 +1033,10 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
           ) : (
             <form onSubmit={handleLoginSubmit} className="mt-6 space-y-4 text-left">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">Admin Email</label>
+                <label className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold block">Administrator Username</label>
                 <input
-                  type="email"
-                  placeholder="admin@nextsitehub.com"
+                  type="text"
+                  placeholder="Enter administrative username"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-850 rounded-xl py-3 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/35 transition-all"
@@ -682,17 +1055,37 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                     Forgot passcode?
                   </button>
                 </div>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl py-3 px-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/35 transition-all font-mono"
-                  required
-                />
-                <p className="text-[9px] text-slate-500 font-mono mt-1">
-                  Local Offline Fallback Key is <code className="text-cyan-400 bg-cyan-950/40 px-1 py-0.5 rounded font-mono">admin123</code>
-                </p>
+                <div className="relative">
+                  <input
+                    type={showLoginPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-850 rounded-xl py-3 pl-4 pr-10 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/35 transition-all font-mono"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white transition-colors"
+                  >
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between mt-2 pt-1">
+                  <label className="flex items-center space-x-2 text-[10px] text-slate-400 font-mono select-none cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="rounded border-slate-800 bg-slate-950 text-cyan-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 accent-cyan-500 cursor-pointer"
+                    />
+                    <span>Remember Me</span>
+                  </label>
+                  <p className="text-[9px] text-slate-500 font-mono">
+                    Local Fallback Passcode: <code className="text-cyan-400 bg-cyan-950/40 px-1 py-0.5 rounded font-mono">admin123</code>
+                  </p>
+                </div>
               </div>
 
               <button
@@ -711,26 +1104,6 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
-              </button>
-
-              <div className="relative my-5 flex items-center justify-center">
-                <div className="absolute inset-x-0 h-[1px] bg-slate-800" />
-                <span className="relative bg-[#0F172A] px-3 text-[10px] font-mono uppercase tracking-widest text-slate-500">OR</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={isSigningIn}
-                className="w-full py-3 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-850 text-slate-300 font-semibold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#EA4335"
-                    d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.579-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.245-3.126C18.232 1.777 15.483.986 12.24.986c-6.08 0-11 4.92-11 11s4.92 11 11 11c6.34 0 10.55-4.444 10.55-10.73 0-.726-.077-1.282-.175-1.685H12.24z"
-                  />
-                </svg>
-                <span>Authorize with Google</span>
               </button>
             </form>
           )}
@@ -2687,6 +3060,293 @@ export default function AdminDashboard({ onClose }: AdminDashboardProps) {
                       <span>Save global settings</span>
                     </button>
                   </form>
+
+                  {/* Administrative Security & Credentials section */}
+                  <div className="mt-12 pt-10 border-t border-slate-850 space-y-6">
+                    <div>
+                      <h2 className="font-display text-2xl font-black text-white uppercase tracking-tight">Security & Credentials</h2>
+                      <p className="text-slate-500 text-xs mt-0.5">Manage administrative credentials, rotate passcodes, and monitor session histories securely.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <form onSubmit={handleSaveCredentials} className="lg:col-span-2 bg-[#0F172A] border border-slate-800/80 rounded-2xl p-6 space-y-5 shadow-sm text-left">
+                        <div className="border-b border-slate-850 pb-3 flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-[#06B6D4] uppercase block font-bold">Credential Rotation</span>
+                          <span className="text-[9px] font-mono text-slate-500 uppercase">Enforces NIST SP 800-63B standards</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Current Username (Read-Only)</label>
+                            <input
+                              type="text"
+                              disabled
+                              value={currentUser?.username || currentUser?.email?.split("@")[0] || "admin"}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2.5 px-3 text-slate-500 font-mono focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block">New Administrator Username *</label>
+                            <input
+                              type="text"
+                              value={newUsername}
+                              onChange={(e) => setNewUsername(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 px-3 text-white focus:outline-none"
+                              placeholder="e.g. administrator"
+                              required
+                            />
+                            <p className="text-[9px] text-slate-500 font-mono mt-1">5-32 characters, alphanumeric, underscores, hyphens.</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Recovery Email *</label>
+                            <input
+                              type="email"
+                              value={recoveryEmail}
+                              onChange={(e) => setRecoveryEmail(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 px-3 text-white focus:outline-none"
+                              placeholder="e.g. recovery@domain.com"
+                              required
+                            />
+                            <p className="text-[9px] text-slate-500 font-mono mt-1">For secure passwords restoration & critical alerts.</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5 text-xs">
+                          <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Current Workspace Passcode *</label>
+                          <div className="relative">
+                            <input
+                              type={showCurrentPasscode ? "text" : "password"}
+                              value={currentPasscode}
+                              onChange={(e) => setCurrentPasscode(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 pl-3 pr-10 text-white focus:outline-none font-mono"
+                              placeholder="••••••••••••"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowCurrentPasscode(!showCurrentPasscode)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white transition-colors"
+                            >
+                              {showCurrentPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <label className="text-[10px] font-mono text-slate-400 uppercase font-bold">New Workspace Passcode *</label>
+                              <button
+                                type="button"
+                                onClick={handleGeneratePasscode}
+                                className="text-[9px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>Generate Strong</span>
+                              </button>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type={showNewPasscode ? "text" : "password"}
+                                value={newPasscode}
+                                onChange={(e) => setNewPasscode(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 pl-3 pr-10 text-white focus:outline-none font-mono"
+                                placeholder="••••••••••••"
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowNewPasscode(!showNewPasscode)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white transition-colors"
+                              >
+                                {showNewPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                            {/* Simple Passcode Strength Meter */}
+                            {newPasscode && (
+                              <div className="mt-1.5 space-y-1">
+                                <div className="flex justify-between text-[9px] font-mono text-slate-500">
+                                  <span>Strength Estimate:</span>
+                                  <span className={
+                                    newPasscode.length < 12 ? "text-red-400" :
+                                    (/[A-Z]/.test(newPasscode) && /[a-z]/.test(newPasscode) && /[0-9]/.test(newPasscode) && /[^A-Za-z0-9]/.test(newPasscode)) ? "text-emerald-400" : "text-amber-400"
+                                  }>
+                                    {newPasscode.length < 12 ? "Too Short" :
+                                     (/[A-Z]/.test(newPasscode) && /[a-z]/.test(newPasscode) && /[0-9]/.test(newPasscode) && /[^A-Za-z0-9]/.test(newPasscode)) ? "Strong (Complexity Met)" : "Weak (Requires Upper/Lower/Number/Special)"}
+                                  </span>
+                                </div>
+                                <div className="h-1 bg-slate-850 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full transition-all duration-300" style={{
+                                    width: newPasscode.length < 12 ? "25%" :
+                                           (/[A-Z]/.test(newPasscode) && /[a-z]/.test(newPasscode) && /[0-9]/.test(newPasscode) && /[^A-Za-z0-9]/.test(newPasscode)) ? "100%" : "60%",
+                                    backgroundColor: newPasscode.length < 12 ? "#F87171" :
+                                                     (/[A-Z]/.test(newPasscode) && /[a-z]/.test(newPasscode) && /[0-9]/.test(newPasscode) && /[^A-Za-z0-9]/.test(newPasscode)) ? "#34D399" : "#FBBF24"
+                                  }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono text-slate-400 uppercase font-bold block">Confirm New Passcode *</label>
+                            <div className="relative">
+                              <input
+                                type={showConfirmNewPasscode ? "text" : "password"}
+                                value={confirmNewPasscode}
+                                onChange={(e) => setConfirmNewPasscode(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-850 rounded-lg py-2.5 pl-3 pr-10 text-white focus:outline-none font-mono"
+                                placeholder="••••••••••••"
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowConfirmNewPasscode(!showConfirmNewPasscode)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white transition-colors"
+                              >
+                                {showConfirmNewPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSavingCredentials}
+                          className="py-3 px-8 bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          {isSavingCredentials ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                          <span>Rotate admin credentials</span>
+                        </button>
+                      </form>
+
+                      {/* Security sidebar with policies & verification stats */}
+                      <div className="space-y-4">
+                        <div className="bg-[#0F172A] border border-slate-800/80 rounded-2xl p-5 text-left text-xs space-y-4 shadow-sm">
+                          <h4 className="text-[10px] font-mono text-[#06B6D4] uppercase block font-bold border-b border-slate-850 pb-2">Passcode Policies</h4>
+                          <ul className="space-y-2 text-slate-400">
+                            <li className="flex items-start gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                              <span>Minimum 12 character length</span>
+                            </li>
+                            <li className="flex items-start gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                              <span>Uppercase & lowercase letters</span>
+                            </li>
+                            <li className="flex items-start gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                              <span>Numeric digits (0-9)</span>
+                            </li>
+                            <li className="flex items-start gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                              <span>Special characters (e.g. !@#$)</span>
+                            </li>
+                          </ul>
+                          <div className="p-3 bg-cyan-500/5 border border-cyan-500/10 rounded-xl text-slate-400 text-[11px] leading-relaxed">
+                            <Info className="w-4 h-4 text-cyan-400 mb-1.5" />
+                            To maximize operations room safety, avoid using words that appear in the dictionary or match your administrator username.
+                          </div>
+                          {currentUser?.lastCredentialUpdate && (
+                            <div className="pt-3 border-t border-slate-850 text-[10px] font-mono text-slate-500 flex flex-col gap-1">
+                              <span>Last Credentials Rotation:</span>
+                              <span className="text-slate-300 font-bold">{new Date(currentUser.lastCredentialUpdate).toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Login audit logs section */}
+                    <div className="bg-[#0F172A] border border-slate-800/80 rounded-2xl p-6 shadow-sm text-left">
+                      <div className="border-b border-slate-850 pb-3 flex items-center justify-between mb-4">
+                        <span className="text-[10px] font-mono text-[#06B6D4] uppercase block font-bold">Recent Sign-In History</span>
+                        <span className="text-[9px] font-mono text-slate-500 uppercase">Session Audit Logs</span>
+                      </div>
+                      
+                      {currentUser?.loginHistory && currentUser.loginHistory.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs text-slate-400 border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-850 text-[10px] font-mono text-slate-500 uppercase">
+                                <th className="py-2.5 px-3">Date & Time</th>
+                                <th className="py-2.5 px-3">IP Address</th>
+                                <th className="py-2.5 px-3">Geo-Location</th>
+                                <th className="py-2.5 px-3">Browser / Device</th>
+                                <th className="py-2.5 px-3">Session ID</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {currentUser.loginHistory.map((log: any, index: number) => (
+                                <tr key={log.sessionId || index} className="border-b border-slate-850/50 hover:bg-slate-900/35 transition-colors">
+                                  <td className="py-2.5 px-3 font-mono text-[#06B6D4]">{new Date(log.timestamp).toLocaleString()}</td>
+                                  <td className="py-2.5 px-3 font-mono text-white">{log.ip}</td>
+                                  <td className="py-2.5 px-3">{log.location || "Approximate Bangalore, India"}</td>
+                                  <td className="py-2.5 px-3 truncate max-w-xs" title={log.userAgent}>{log.userAgent || "Chrome Client"}</td>
+                                  <td className="py-2.5 px-3 font-mono text-slate-600 text-[10px]">{log.sessionId || "local_session"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="py-6 text-center text-slate-500 font-mono text-xs">
+                          No historical logs present. A record of login entries will populate upon subsequent administrative handshakes.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Secure confirmation dialog */}
+                  {showConfirmDialog && (
+                    <div className="fixed inset-0 bg-[#02040a]/80 backdrop-blur-sm flex items-center justify-center p-4 z-55 animate-fadeIn">
+                      <div className="bg-[#0F172A] border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl shrink-0">
+                            <AlertTriangle className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <h3 className="font-display text-base font-bold text-white uppercase tracking-tight">Rotate Credentials?</h3>
+                            <p className="text-slate-400 text-xs mt-2 leading-relaxed">
+                              You are about to modify your administrator credentials. This action will apply to all subsequent operations room sessions.
+                            </p>
+                            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850 mt-4 space-y-1.5 text-xs font-mono">
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">New Username:</span>
+                                <span className="text-white font-bold">{newUsername}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Recovery Email:</span>
+                                <span className="text-slate-300 font-bold">{recoveryEmail}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">New Passcode:</span>
+                                <span className="text-cyan-400 font-bold">•••••••••••• (complex)</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-850">
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmDialog(false)}
+                            className="py-2 px-4 border border-slate-800 hover:border-slate-700 text-slate-300 font-bold uppercase text-[10px] tracking-wider rounded-lg transition-all"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={confirmSaveCredentials}
+                            className="py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold uppercase text-[10px] tracking-wider rounded-lg transition-all flex items-center gap-1.5"
+                          >
+                            {isSavingCredentials && <Loader2 className="w-3 h-3 animate-spin" />}
+                            <span>Confirm Rotation</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
