@@ -3,6 +3,10 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { apiRouter } from "./server/routes/api.routes";
+import { SecurityMiddlewares } from "./server/middlewares/security";
+import { LoggingMiddlewares } from "./server/middlewares/logger";
+import { SeoController } from "./server/controllers/seo.controller";
 
 dotenv.config();
 
@@ -10,7 +14,16 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Centralized request logging and security compliance
+  app.use(LoggingMiddlewares.requestLogger);
+  app.use(SecurityMiddlewares.securityHeaders);
   app.use(express.json());
+
+  // Mount API rate limiters on all incoming API routes
+  app.use("/api", SecurityMiddlewares.rateLimiter);
+
+  // Mount modular REST API endpoints under v1 namespace
+  app.use("/api/v1", apiRouter);
 
   // Google Gen AI Client
   let ai: GoogleGenAI | null = null;
@@ -159,24 +172,10 @@ async function startServer() {
   });
 
   // Robots.txt Route for SEO indexability
-  app.get("/robots.txt", (req, res) => {
-    res.type("text/plain");
-    res.send("User-agent: *\nAllow: /\nSitemap: https://nextsitehub.com/sitemap.xml");
-  });
+  app.get("/robots.txt", SeoController.getRobotsTxt);
 
   // Sitemap.xml Route for search bots
-  app.get("/sitemap.xml", (req, res) => {
-    res.type("application/xml");
-    res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://nextsitehub.com/</loc>
-    <lastmod>2026-06-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-</urlset>`);
-  });
+  app.get("/sitemap.xml", SeoController.getSitemapXML);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
@@ -192,6 +191,9 @@ async function startServer() {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
+
+  // Centralized terminal error interceptor
+  app.use(LoggingMiddlewares.errorHandler);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
